@@ -1,0 +1,41 @@
+!SESSION 2026-02-05 09:16:29.696 -----------------------------------------------
+eclipse.buildId=Version 1.18.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=fr_FR
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2026-02-05 09:16:39.781
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-02-05 09:16:39.784
+!MESSAGE Log4j2 initialized with config file C:\Users\G45\Documents\DUBOSCLARD_LOZANO\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-02-05 09:16:42.920
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-02-05 09:18:55.821
+!MESSAGE Indexed 'STM32-2026-G221' (23 sources, 83 headers) in 5.96 sec: 5,747 declarations; 30,891 references; 0 unresolved inclusions; 1 syntax errors; 2 unresolved names (0.0055%)
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-02-05 09:31:41.469
+!MESSAGE Indexed 'BP-LED' (23 sources, 83 headers) in 4.31 sec: 5,747 declarations; 30,891 references; 0 unresolved inclusions; 1 syntax errors; 2 unresolved names (0.0055%)
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-02-05 09:33:36.200
+!MESSAGE Indexed 'LED' (0 sources, 0 headers) in 0.002 sec: 0 declarations; 0 references; 0 unresolved inclusions; 0 syntax errors; 0 unresolved names (0%)
+
+!ENTRY org.eclipse.core.resources 2 2 2026-02-05 09:39:43.373
+!MESSAGE Save operation warnings.
+!SUBENTRY 1 org.eclipse.core.resources 2 234 2026-02-05 09:39:43.373
+!MESSAGE The project description file (.project) for 'LED' was missing.  This file contains important information about the project.  A new project description file has been created, but some information about the project may have been lost.
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-02-05 09:47:17.844
+!MESSAGE Indexed 'BP-LED-Interruption' (23 sources, 83 headers) in 5.55 sec: 5,747 declarations; 30,891 references; 0 unresolved inclusions; 1 syntax errors; 2 unresolved names (0.0055%)
+
+!ENTRY com.st.stm32cube.common.projectcreation 4 0 2026-02-05 09:59:39.672
+!MESSAGE Project is null
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-02-05 10:01:27.624
+!MESSAGE Indexed 'LED' (23 sources, 83 headers) in 5.73 sec: 5,747 declarations; 30,891 references; 0 unresolved inclusions; 1 syntax errors; 2 unresolved names (0.0055%)
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-02-05 10:07:30.337
+!MESSAGE Indexed 'BE-AffichageLCD' (23 sources, 83 headers) in 5.27 sec: 5,747 declarations; 30,891 references; 0 unresolved inclusions; 1 syntax errors; 2 unresolved names (0.0055%)

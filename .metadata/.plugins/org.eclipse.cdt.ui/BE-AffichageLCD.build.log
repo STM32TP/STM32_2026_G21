@@ -1,0 +1,10 @@
+11:16:57 **** Incremental Build of configuration Debug for project BE-AffichageLCD ****
+make -j4 all 
+arm-none-eabi-size  BE-AffichageLCD.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16720	     12	   1796	  18528	   4860	BE-AffichageLCD.elf
+Finished building: default.size.stdout
+ 
+
+11:16:57 Build Finished. 0 errors, 0 warnings. (took 370ms)
+

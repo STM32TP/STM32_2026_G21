@@ -1,0 +1,18 @@
+/*
+ * capteurtemphumid.h
+ *
+ *  Created on: Feb 5, 2026
+ *      Author: G45
+ */
+
+#ifndef INC_CAPTEURTEMPHUMID_H_
+#define INC_CAPTEURTEMPHUMID_H_
+
+#include "stm32l4xx_hal.h"
+#include "stm32l4xx_hal_i2c.h"
+
+
+#define CAPT_ADDRESS     0x00
+#define modmeas 0x2C06
+
+#endif /* INC_CAPTEURTEMPHUMID_H_ */
