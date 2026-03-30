@@ -1,0 +1,5 @@
+../Core/Src/pcf8574.c:26:6:PCF8574_Init	1
+../Core/Src/pcf8574.c:48:19:PCF8574_ReadPort	1
+../Core/Src/pcf8574.c:62:9:PCF8574_ReadPin	2
+../Core/Src/pcf8574.c:82:9:PCF8574_ReadDSR	1
+../Core/Src/pcf8574.c:94:9:PCF8574_ReadDSL	1

@@ -1,0 +1,17 @@
+#ifndef LINE_FOLLOWER_H
+#define LINE_FOLLOWER_H
+
+#include "main.h"
+
+typedef enum{
+    LINE_FOLLOW,
+    OBSTACLE_DETECTED,
+    LEAVE_OBSTACLE,
+	REALIGN,
+    SEARCH_LINE
+} RobotState;
+
+void LineFollower_Update(uint16_t *sensors);
+void LineFollower_Init();
+
+#endif

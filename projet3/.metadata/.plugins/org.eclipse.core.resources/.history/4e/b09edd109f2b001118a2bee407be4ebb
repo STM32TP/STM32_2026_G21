@@ -1,0 +1,105 @@
+/*
+ * TRSensors.c
+ *
+ * Description :
+ * Ce module permet de gérer un ensemble de capteurs (typiquement capteurs IR)
+ * connectés à un convertisseur analogique-numérique TLC2543 via SPI.
+ * Il permet d'initialiser le système et de lire les valeurs des capteurs.
+ */
+
+#include "TRSensors.h"
+
+/**
+  * @brief Initialisation des capteurs
+  *
+  * Met la ligne CS (Chip Select) à l'état haut,
+  * ce qui désélectionne le convertisseur TLC2543.
+  */
+void TR_Sensors_Init(void) {
+    HAL_GPIO_WritePin(TR_CS_PORT, TR_CS_PIN, GPIO_PIN_SET);
+}
+
+
+/**
+  * @brief Lecture d'un canal du TLC2543 (ADC 12 bits via SPI)
+  *
+  * @param channel Numéro du canal à lire (0 à 10)
+  * @return uint16_t Valeur convertie (résultat du cycle précédent)
+  *
+  * @note Important :
+  * Le TLC2543 fonctionne avec un décalage :
+  * la valeur retournée correspond à la conversion demandée
+  * lors de l'appel précédent.
+  */
+uint16_t TR_TLC2543_ReadChannel(uint8_t channel) {
+
+    uint16_t tx_data; // Donnée à transmettre
+    uint16_t rx_data = 0; // Donnée reçue
+
+    // Vérification du canal valide
+    if (channel > 10) return 0;
+
+    // Préparation de la commande :
+    // Le numéro de canal est placé dans les bits de poids fort
+    tx_data = (channel << 8);
+
+    // ========================
+    // DÉBUT COMMUNICATION SPI
+    // ========================
+
+    // CS à 0 : sélection du convertisseur
+    HAL_GPIO_WritePin(TR_CS_PORT, TR_CS_PIN, GPIO_PIN_RESET);
+
+    // Envoi de la commande + réception de la donnée précédente
+    if (HAL_SPI_TransmitReceive(&hspi1, (uint8_t*)&tx_data, (uint8_t*)&rx_data, 1, 10) != HAL_OK) {
+
+        // En cas d'erreur, on libère le bus et retourne 0
+        HAL_GPIO_WritePin(TR_CS_PORT, TR_CS_PIN, GPIO_PIN_SET);
+        return 0;
+    }
+
+    // CS à 1 : fin de communication
+    HAL_GPIO_WritePin(TR_CS_PORT, TR_CS_PIN, GPIO_PIN_SET);
+
+    return rx_data;
+}
+
+
+/**
+  * @brief Mise à jour des valeurs des capteurs (A0 à A4)
+  *
+  * @param sensor_array Tableau de 5 éléments pour stocker les mesures
+  *
+  * Principe :
+  * À cause du fonctionnement du TLC2543 (pipeline),
+  * chaque lecture correspond à la conversion précédente.
+  * Il faut donc effectuer une séquence spécifique pour obtenir
+  * les bonnes valeurs.
+  */
+void TR_Update_Sensors(uint16_t *sensor_array) {
+
+    // ========================
+    // PIPELINE DE LECTURE ADC
+    // ========================
+
+    // 1. Demande A0 → donnée invalide (ancien cycle)
+    TR_TLC2543_ReadChannel(0);
+
+    // 2. Demande A1 → reçoit A0
+    sensor_array[0] = TR_TLC2543_ReadChannel(1);
+
+    // 3. Demande A2 → reçoit A1
+    sensor_array[1] = TR_TLC2543_ReadChannel(2);
+
+    // 4. Demande A3 → reçoit A2
+    sensor_array[2] = TR_TLC2543_ReadChannel(3);
+
+    // 5. Demande A4 → reçoit A3
+    sensor_array[3] = TR_TLC2543_ReadChannel(4);
+
+    // 6. Demande A0 → reçoit A4
+    sensor_array[4] = TR_TLC2543_ReadChannel(0);
+
+    // Résultat final :
+    // sensor_array contient les valeurs des capteurs A0 à A4
+}

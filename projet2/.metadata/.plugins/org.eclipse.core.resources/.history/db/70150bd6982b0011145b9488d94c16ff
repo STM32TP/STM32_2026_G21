@@ -1,0 +1,90 @@
+#include "line_follower.h"
+#include "motor.h"
+/*#include "main.h"
+#include "i2c.h"
+#include "stm32l4xx_hal.h"*/
+
+#define BASE_SPEED 200
+
+#define KP 35
+#define KD 120
+
+#define THRESHOLD 2400 // AJUSTA según tu sensor
+
+#define TARGET_DISTANCE 7
+
+
+
+static float last_error = 0;
+
+
+/* ========================= */
+/* LINE FOLLOW PD            */
+/* ========================= */
+void LineControl_PD(uint16_t *s)
+{
+	int weights[5] = {0,1000,2000,3000,4000};
+	long weighted_sum = 0;
+	long sum = 0;
+
+	for(int i=0;i<5;i++)
+	{
+		int value = THRESHOLD - s[i];
+
+		if(value < 0){
+			value = 0;
+		}
+		if(value > 1400){
+			value = 1400;
+		}
+
+		weighted_sum += (long)value * weights[i];
+		sum += value;
+	}
+
+	if(sum == 0)
+	{
+		if(last_error > 0){
+			Moteur_Set(-200,200);
+		}else{
+			Moteur_Set(200,-200);
+		}
+		return;
+	}
+
+	int position = weighted_sum/sum;
+	float error = (position-2000)/1000.0f;
+	float control = KP*error + KD*(error-last_error);
+
+	last_error = error;
+
+	if(control > 400){
+		control = 400;
+	}
+	if(control < -400){
+		control = -400;
+	}
+
+	int left = BASE_SPEED + control;
+	int right = BASE_SPEED - control;
+
+	Moteur_Set(-left,-right);
+}
+
+
+/* ========================= */
+/* INIT                      */
+/* ========================= */
+void LineFollower_Init()
+{
+    Motor_Init();
+}
+
+
+/* ========================= */
+/* MAIN UPDATE               */
+/* ========================= */
+void LineFollower_Update(uint16_t *s)
+{
+	LineControl_PD(s);
+}

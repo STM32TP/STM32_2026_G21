@@ -1,0 +1,320 @@
+/*
+ * line_follower_advanced.c
+ *
+ * Description :
+ * Ce module implémente un robot autonome capable de :
+ * - Suivre une ligne (contrôle PD)
+ * - Détecter et éviter des obstacles (ultrason + capteurs latéraux)
+ * - Rechercher et retrouver la ligne après évitement
+ *
+ * Le comportement est basé sur une machine à états (FSM).
+ */
+
+#include "line_follower.h"
+#include "ultrasonic.h"
+#include "motor.h"
+#include "main.h"
+#include "i2c.h"
+#include "pcf8574.h"
+#include "stm32l4xx_hal.h"
+
+// État courant du robot (machine à états)
+RobotState state = LINE_FOLLOW;
+
+// Structure pour gérer l'expandeur I2C (PCF8574)
+PCF8574_HandleTypeDef pcf;
+
+// Indique le côté de l'obstacle (0 = gauche, 1 = droite)
+int obstacle_side = 0;
+
+// Distance mesurée par le capteur ultrasonique
+float distance = 10000;
+
+// Mémoire pour le contrôleur PD
+static float last_error = 0;
+
+// Timer pour gérer les transitions entre états
+uint32_t state_timer = 0;
+
+
+/* ========================= */
+/* INIT                      */
+/* ========================= */
+/**
+ * @brief Initialisation du système complet
+ *
+ * Initialise :
+ * - L'expandeur I2C (PCF8574)
+ * - Le capteur ultrasonique
+ * - Les moteurs
+ */
+void LineFollower_Init()
+{
+    PCF8574_Init(&pcf, &hi2c1, PCF8574_ADDR);
+    Ultrasonic_Init();
+    Motor_Init();
+}
+
+
+/* ========================= */
+/* LINE FOLLOW PD            */
+/* ========================= */
+/**
+ * @brief Suivi de ligne avec contrôleur PD
+ *
+ * Calcule la position de la ligne et ajuste les moteurs
+ */
+void LineControl_PD(uint16_t *s)
+{
+    int weights[5] = {0,1000,2000,3000,4000};
+    long weighted_sum = 0;
+    long sum = 0;
+
+    // Traitement des capteurs
+    for(int i=0;i<5;i++)
+    {
+        int value = THRESHOLD - s[i];
+
+        if(value < 0) value = 0;
+        if(value > 1400) value = 1400;
+
+        weighted_sum += (long)value * weights[i];
+        sum += value;
+    }
+
+    // Si la ligne est perdue
+    if(sum == 0)
+    {
+        if(last_error > 0){
+            Moteur_Set(-200,200);
+        }else{
+            Moteur_Set(200,-200);
+        }
+        return;
+    }
+
+    // Calcul de la position et de l'erreur
+    int position = weighted_sum/sum;
+    float error = (position-2000)/1000.0f;
+
+    // Contrôleur PD
+    float control = KP*error + KD*(error-last_error);
+    last_error = error;
+
+    // Saturation
+    if(control > 400) control = 400;
+    if(control < -400) control = -400;
+
+    // Calcul des vitesses
+    int left = BASE_SPEED + control;
+    int right = BASE_SPEED - control;
+
+    Moteur_Set(-left,-right);
+}
+
+
+/* ========================= */
+/* STATE UPDATE              */
+/* ========================= */
+/**
+ * @brief Mise à jour de la machine à états
+ *
+ * Combine :
+ * - Suivi de ligne
+ * - Détection d'obstacle
+ * - Évitement et récupération
+ */
+void LineFollower_Update(uint16_t *s)
+{
+    // Lecture capteurs latéraux (via PCF8574)
+    uint8_t dsl = PCF8574_ReadDSL(&pcf);
+    uint8_t dsr = PCF8574_ReadDSR(&pcf);
+
+    // Lecture distance ultrasonique
+    distance = Ultrasonic_Read();
+
+    if(distance < 0){
+        distance = 0;
+    }
+
+    // ========================
+    // PRIORITÉ AU SUIVI DE LIGNE
+    // ========================
+    if(distance > TARGET_DISTANCE && dsl != 0 && dsr != 0){
+        for(int i=0;i<5;i++)
+        {
+            if(s[i] < THRESHOLD){
+                state = LINE_FOLLOW;
+                break;
+            }
+        }
+    }
+
+    // ========================
+    // MACHINE À ÉTATS
+    // ========================
+    switch(state)
+    {
+
+        /* ========================= */
+        /* LINE FOLLOW               */
+        /* ========================= */
+        case LINE_FOLLOW:
+
+            // Détection d'obstacle proche
+            if(distance <= TARGET_DISTANCE && distance > 0)
+            {
+                if(dsl == 0 || dsr == 0){
+
+                    // Détermination du côté de l'obstacle
+                    if(dsl == 0){
+                        obstacle_side = 0; // gauche
+                    }else if(dsr == 0){
+                        obstacle_side = 1; // droite
+                    }
+
+                    state = OBSTACLE_DETECTED;
+                    state_timer = HAL_GetTick();
+                    return;
+                }
+            }
+            else
+            {
+                // Suivi normal de ligne
+                if(dsl != 0 && dsr != 0){
+                    LineControl_PD(s);
+                }else{
+                    Moteur_Set(200,200);
+                }
+            }
+        break;
+
+
+        /* ========================= */
+        /* OBSTACLE DETECTED         */
+        /* ========================= */
+        case OBSTACLE_DETECTED:
+
+            // Petit virage initial pour éviter l'obstacle
+            if(HAL_GetTick() - state_timer < 335)
+            {
+                if(obstacle_side == 0){
+                    Moteur_Set(-200,200); // tourner à droite
+                }else{
+                    Moteur_Set(200,-200); // tourner à gauche
+                }
+                return;
+            }
+            else
+            {
+                // Transition vers contournement
+                if(dsl != 0 && dsr != 0){
+                    state = LEAVE_OBSTACLE;
+                    state_timer = HAL_GetTick();
+                }else{
+                    Moteur_Set(400,400);
+                    return;
+                }
+            }
+        break;
+
+
+        /* ========================= */
+        /* LEAVE OBSTACLE            */
+        /* ========================= */
+        case LEAVE_OBSTACLE:
+
+            // Contournement de l'obstacle
+            if(HAL_GetTick() - state_timer < 880)
+            {
+                if(obstacle_side == 0){
+                    Moteur_Set(-230,-450);
+                }else{
+                    Moteur_Set(-450,-200);
+                }
+                return;
+            }
+            else
+            {
+                if(dsl != 0 && dsr != 0){
+                    state = REALIGN;
+                    state_timer = HAL_GetTick();
+                }else{
+                    Moteur_Set(200,200);
+                    return;
+                }
+            }
+        break;
+
+
+        /* ========================= */
+        /* REALIGN                   */
+        /* ========================= */
+        case REALIGN:
+
+            // Rotation pour se réaligner
+            if(HAL_GetTick() - state_timer < 280)
+            {
+                if(obstacle_side == 0){
+                    Moteur_Set(-200,200);
+                }else{
+                    Moteur_Set(200,-200);
+                }
+                return;
+            }
+            else
+            {
+                // Recherche de la ligne
+                for(int i=0;i<5;i++)
+                {
+                    if(s[i] < THRESHOLD){
+                        state = LINE_FOLLOW;
+                        last_error = 0;
+                        return;
+                    }
+                }
+
+                // Si ligne non trouvée → mode recherche
+                if(dsl != 0 && dsr != 0){
+                    state = SEARCH_LINE;
+                    state_timer = HAL_GetTick();
+                }else{
+                    Moteur_Set(200,200);
+                    return;
+                }
+            }
+        break;
+
+
+        /* ========================= */
+        /* SEARCH LINE               */
+        /* ========================= */
+        case SEARCH_LINE:
+
+            // Rotation pour retrouver la ligne
+            if(HAL_GetTick() - state_timer < 300)
+            {
+                if(obstacle_side == 0){
+                    Moteur_Set(200,-200);
+                }else{
+                    Moteur_Set(-200,200);
+                }
+                return;
+            }
+            else
+            {
+                // Avance lente en cherchant la ligne
+                Moteur_Set(-200,-200);
+
+                for(int i=0;i<5;i++)
+                {
+                    if(s[i] < THRESHOLD){
+                        state = LINE_FOLLOW;
+                        last_error = 0;
+                        return;
+                    }
+                }
+            }
+        break;
+    }
+}

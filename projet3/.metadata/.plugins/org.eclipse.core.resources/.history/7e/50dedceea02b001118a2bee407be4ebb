@@ -1,0 +1,97 @@
+/*
+ * pcf8574.c
+ *
+ *  Created on: Mar 12, 2026
+ *      Author: jaloz
+ *
+ *  Description :
+ *  Ce module permet de gérer l'expandeur d'E/S PCF8574 via le bus I2C.
+ *  Il est utilisé pour lire des entrées digitales (par exemple capteurs latéraux).
+ */
+
+#include "pcf8574.h"
+
+
+/**
+ * @brief Initialisation du PCF8574
+ *
+ * @param dev     Structure du périphérique
+ * @param hi2c    Handle du bus I2C
+ * @param address Adresse I2C du PCF8574
+ *
+ * Principe :
+ * - Le PCF8574 fonctionne avec des E/S quasi-bidirectionnelles
+ * - Mettre un bit à 1 configure la broche en entrée
+ */
+void PCF8574_Init(PCF8574_HandleTypeDef *dev, I2C_HandleTypeDef *hi2c, uint8_t address)
+{
+    // Sauvegarde des paramètres
+    dev->hi2c = hi2c;
+    dev->address = address;
+
+    // Configuration de toutes les broches en entrée (1 = input)
+    dev->port_state = 0xFF;
+
+    // Envoi de la configuration au composant via I2C
+    HAL_I2C_Master_Transmit(dev->hi2c, dev->address, &dev->port_state, 1, 10);
+}
+
+
+/**
+ * @brief Lecture complète du port (8 bits)
+ *
+ * @param dev  Structure du périphérique
+ * @param data Pointeur où stocker les données lues
+ *
+ * @return HAL_StatusTypeDef Statut de la communication I2C
+ */
+HAL_StatusTypeDef PCF8574_ReadPort(PCF8574_HandleTypeDef *dev, uint8_t *data)
+{
+    return HAL_I2C_Master_Receive(dev->hi2c, dev->address, data, 1, 10);
+}
+
+
+/**
+ * @brief Lecture d'une broche spécifique
+ *
+ * @param dev Structure du périphérique
+ * @param pin Numéro de la broche (0 à 7)
+ *
+ * @return uint8_t État logique (0 ou 1)
+ */
+uint8_t PCF8574_ReadPin(PCF8574_HandleTypeDef *dev, uint8_t pin)
+{
+    uint8_t data;
+
+    // Lecture du port complet
+    if(PCF8574_ReadPort(dev, &data) != HAL_OK){
+    	return 0; // En cas d'erreur, retourne 0
+    }
+
+    // Extraction du bit correspondant à la broche
+    return (data >> pin) & 1;
+}
+
+
+/**
+ * @brief Lecture du capteur droit (DSR)
+ *
+ * @param dev Structure du périphérique
+ * @return uint8_t État du capteur (0 ou 1)
+ */
+uint8_t PCF8574_ReadDSR(PCF8574_HandleTypeDef *dev)
+{
+    return PCF8574_ReadPin(dev, DSL_PIN);
+}
+
+
+/**
+ * @brief Lecture du capteur gauche (DSL)
+ *
+ * @param dev Structure du périphérique
+ * @return uint8_t État du capteur (0 ou 1)
+ */
+uint8_t PCF8574_ReadDSL(PCF8574_HandleTypeDef *dev)
+{
+    return PCF8574_ReadPin(dev, DSR_PIN);
+}

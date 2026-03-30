@@ -1,0 +1,64 @@
+/*
+ * motor.c
+ *
+ *  Created on: Feb 26, 2026
+ *      Author: jaloz
+ */
+
+#include "motor.h"
+
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+
+#define PWM_MAX 1000
+
+void Motor_Init(void)
+{
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); // PB4
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); // PB10
+}
+
+void Motor_Stop(void)
+{
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+}
+
+void Moteur_Set(int gauche, int droite)
+{
+    // IZQUIERDO (PWMA → TIM2_CH3 → PB10)
+    if(gauche >= 0)
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);   // AIN1
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET); // AIN2
+    }
+    else
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
+        gauche = -gauche;
+    }
+
+    // DERECHO (PWMB → TIM2_CH1 → PB4)
+    if(droite >= 0)
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);  // BIN1
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET); // BIN2
+    }
+    else
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+        droite = -droite;
+    }
+
+    if(gauche > PWM_MAX){
+        gauche = PWM_MAX;  
+    } 
+    if(droite > PWM_MAX){
+        droite = PWM_MAX;
+    } 
+
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, gauche);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, droite);
+}

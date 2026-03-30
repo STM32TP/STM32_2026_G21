@@ -1,0 +1,247 @@
+#include "line_follower.h"
+#include "ultrasonic.h"
+#include "motor.h"
+#include "main.h"
+#include "i2c.h"
+#include "pcf8574.h"
+#include "stm32l4xx_hal.h"
+
+RobotState state = LINE_FOLLOW;
+PCF8574_HandleTypeDef pcf;
+
+int obstacle_side = 0; // 0 izquierda, 1 derecha
+float distance = 10000;
+static float last_error = 0;
+uint32_t state_timer = 0;
+
+
+/* ========================= */
+/* LINE FOLLOW PD            */
+/* ========================= */
+void LineControl_PD(uint16_t *s)
+{
+	int weights[5] = {0,1000,2000,3000,4000};
+	long weighted_sum = 0;
+	long sum = 0;
+
+	for(int i=0;i<5;i++)
+	{
+		int value = THRESHOLD - s[i];
+
+		if(value < 0){
+			value = 0;
+		}
+		if(value > 1400){
+			value = 1400;
+		}
+
+		weighted_sum += (long)value * weights[i];
+		sum += value;
+	}
+
+	if(sum == 0)
+	{
+		if(last_error > 0){
+			Moteur_Set(-200,200);
+		}else{
+			Moteur_Set(200,-200);
+		}
+		return;
+	}
+
+	int position = weighted_sum/sum;
+	float error = (position-2000)/1000.0f;
+	float control = KP*error + KD*(error-last_error);
+
+	last_error = error;
+
+	if(control > 400){
+		control = 400;
+	}
+	if(control < -400){
+		control = -400;
+	}
+
+	int left = BASE_SPEED + control;
+	int right = BASE_SPEED - control;
+
+	Moteur_Set(-left,-right);
+}
+
+
+/* ========================= */
+/* INIT                      */
+/* ========================= */
+void LineFollower_Init()
+{
+	PCF8574_Init(&pcf, &hi2c1, PCF8574_ADDR);
+    Ultrasonic_Init();
+    Motor_Init();
+}
+
+
+/* ========================= */
+/* MAIN UPDATE               */
+/* ========================= */
+void LineFollower_Update(uint16_t *s)
+{
+    uint8_t dsl = PCF8574_ReadDSL(&pcf);
+    uint8_t dsr = PCF8574_ReadDSR(&pcf);
+	distance = Ultrasonic_Read();
+	printf("DSR: %4d | DSL: %4d\r\n", (int)dsr, (int)dsl);
+
+    if(distance < 0){
+    	distance = 0;
+    }
+
+    // Si detecta línea, prioriza LINE_FOLLOW
+    if( distance > TARGET_DISTANCE && dsl != 0 && dsr != 0){
+		for(int i=0;i<5;i++)
+		{
+			if(s[i] < THRESHOLD && dsl == 1 && dsr == 1)
+			{
+				state = LINE_FOLLOW;
+				break;
+			}
+    	}
+    }
+
+    switch(state)
+    {
+        /* ========================= */
+        /* LINE FOLLOW               */
+        /* ========================= */
+        case LINE_FOLLOW:
+			if( distance <= TARGET_DISTANCE && distance > 0)
+			{
+				if(dsl == 0 || dsr == 0){
+					if(dsl == 0){
+						obstacle_side = 0; //izq
+					}else if(dsr == 0){
+						obstacle_side = 1; //der
+					}
+
+					state = OBSTACLE_DETECTED;
+					state_timer = HAL_GetTick();
+					return;
+				}
+			}else{
+				if( dsl != 0 && dsr != 0){
+					LineControl_PD(s);
+				}else{
+					Moteur_Set(200,200);
+				}
+			}
+        break;
+
+        /* ========================= */
+        /* OBSTACLE DETECTED         */
+        /* ========================= */
+        case OBSTACLE_DETECTED:
+
+            // pequeño giro inicial
+            if(HAL_GetTick() - state_timer < 335)
+            {
+            	if(obstacle_side == 0){
+					Moteur_Set(-200,200); //evad der
+				}else{
+					Moteur_Set(200,-200); //evad izq
+				}
+            	return;
+            }else{
+				if( dsl != 0 && dsr != 0){
+					state = LEAVE_OBSTACLE;
+					state_timer = HAL_GetTick();
+				}else{
+					Moteur_Set(400,400);
+					return;
+				}
+
+            }
+        break;
+
+        /* ========================= */
+		/* LEAVE OBSTACLE            */
+		/* ========================= */
+		case LEAVE_OBSTACLE:
+			if(HAL_GetTick() - state_timer < 880)
+			{
+				if(obstacle_side == 0){
+					Moteur_Set(-230,-450); //evad izq
+				}else{
+					Moteur_Set(-450,-200); //evad der
+				}
+				return;
+			}else{
+				if( dsl != 0 && dsr != 0){
+					state = REALIGN;
+					state_timer = HAL_GetTick();
+				}else{
+					Moteur_Set(200,200);
+					return;
+				}
+			}
+		break;
+
+		/* ========================= */
+		/* WALL FOLLOW               */
+		/* ========================= */
+		case REALIGN:
+
+			// salir del obstáculo si no hay borde cerca
+			if(HAL_GetTick() - state_timer < 280)
+			{
+				if(obstacle_side == 0){
+					Moteur_Set(-200,200); //evad izq
+				}else{
+					Moteur_Set(200,-200); //evad der
+				}
+				return;
+			}else{
+				for(int i=0;i<5;i++)
+				{
+					if(s[i] < THRESHOLD)
+					{
+						state = LINE_FOLLOW;
+						last_error = 0;
+						return;
+					}else if( dsl != 0 && dsr != 0){
+						state = SEARCH_LINE;
+						state_timer = HAL_GetTick();
+					}else{
+						Moteur_Set(200,200);
+						return;
+					}
+				}
+			}
+
+		break;
+
+        /* ========================= */
+        /* SEARCH LINE               */
+        /* ========================= */
+        case SEARCH_LINE:
+			if(HAL_GetTick()-state_timer < 300){
+				if(obstacle_side == 0){
+					Moteur_Set(200,-200); //evad izq
+				}else{
+					Moteur_Set(-200,200); //evad izq
+				}
+				return;
+			}else{
+				Moteur_Set(-200,-200);
+				// Girar suavemente buscando línea
+
+				for(int i=0;i<5;i++)
+				{
+					if(s[i] < THRESHOLD)
+					{
+						state = LINE_FOLLOW;
+						last_error = 0;
+						return;
+					}
+				}
+			}
+        break;
+   }
+}

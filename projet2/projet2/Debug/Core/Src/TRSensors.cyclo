@@ -1,0 +1,3 @@
+../Core/Src/TRSensors.c:18:6:TR_Sensors_Init	1
+../Core/Src/TRSensors.c:34:10:TR_TLC2543_ReadChannel	3
+../Core/Src/TRSensors.c:79:6:TR_Update_Sensors	1

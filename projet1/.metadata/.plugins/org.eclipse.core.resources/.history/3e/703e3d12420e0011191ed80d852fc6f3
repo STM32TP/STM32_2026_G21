@@ -1,0 +1,46 @@
+/*
+ * ir_bob.c
+ *
+ *  Created on: Feb 20, 2026
+ *      Author: jaloz
+ */
+
+#include "ir_bob.h"
+#include "main.h"
+#include <stdint.h>
+
+
+
+void read_IR(uint8_t *tab)
+{
+    tab[0] = !HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);  // IR5
+    tab[1] = 0;//!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);  // IR2
+    tab[2] = 0;//!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2);  // IR3
+    tab[3] = 0;//!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_10); // IR4
+    tab[4] = 0;//!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11); // IR5
+}
+
+/* retourne position ligne entre -2 et +2 */
+int position_IR(void)
+{
+    uint8_t ir_info[5];
+    read_IR(ir_info);
+
+    int poids[5] = {-2,-1,0,1,2};
+    int somme = 0;
+    int count = 0;
+
+    for(int i=0;i<5;i++)
+    {
+        if(ir_info[i])
+        {
+            somme += poids[i];
+            count++;
+        }
+    }
+
+    if(count == 0)
+        return 99;   // ligne perdue
+
+    return somme / count;
+}
